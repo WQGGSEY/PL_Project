@@ -424,4 +424,26 @@ class Spec extends SpecBase {
     };
     findMin(Nil)
   """), "")
+
+
+  // laziness test
+  // test {x => 0}(6/0), if the laziness is correctly implemented, it should return 0 without error
+  // If we will not implement laziness, it will throw an zero division error
+  test(run("""
+    {x => 0}(6/0)
+  """), "0")
+  // another laziness test
+  // test {x => 0}(y + {z => z}), if the laziness is correctly implemented, it should return 0 without error
+  // If we will not implement laziness, it will throw an error because y is not defined and add operation with closure is not allowed
+  test(run("""
+    {x => 0}(y + {z => z})
+  """), "0")
+
+  //another laziness test
+  // test {x => x}(y + {z => z}), if the laziness is correctly implemented, it should return closure without error
+  // If we will not implement laziness, it will throw an error because y is not defined and add operation with closure is not allowed
+  test(run("""
+    {x => x}(y + {z => z})
+  """), "<function>")
+  
 }

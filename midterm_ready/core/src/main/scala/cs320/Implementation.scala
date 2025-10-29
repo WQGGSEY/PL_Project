@@ -4,22 +4,30 @@ import Value._
 
 object Implementation extends Template {
 
-  def numOp(op: (BigInt, BigInt)=> BigInt): (Value, Value) => Value = (_, _) match{
-	  case (IntV(x), IntV(y)) => IntV(op(x, y))
-	  case (x, y) => error("Runtime error")
+  def strict(v: Value) => Value = v match{
+    case ev@ExprV(expr, env cache) => cache match{
+      case Some(value) => value
+      case _ => {
+        val value = strict(interp(expr, env))
+        ev.v = Some(value)
+        value
+      }
+    }
+    case _ => v
   }
 
-  def compOp(op: (BigInt, BigInt) => Boolean): (Value, Value) => Value = (_, _) match{
-    case (IntV(x), IntV(y)) => BooleanV(op(x, y))
-    case (x, y) => error("Runtime error")
+
+  def numOp[V](op: (BigInt, BigInt)=> V): (Value, Value) => V = (l, r) => (strict(l), strict(r)) match {
+    case (IntV(x), IntV(y)) => op(x+y)
+    case _ => error("Runtime error")
   }
 
-  val val_add = numOp((x: BigInt, y: BigInt) => x + y)
-  val val_mul = numOp((x: BigInt, y: BigInt) => x * y)
-  val val_div = numOp((x: BigInt, y: BigInt) => if(y == 0) error("Runtime error") else x / y)
-  val val_mod = numOp{(x: BigInt, y: BigInt) => if(y == 0) error("Runtime error") else x % y}
-  val val_eq = compOp((x: BigInt, y: BigInt) => x == y) 
-  val val_lt = compOp((x: BigInt, y: BigInt) => x < y)
+  val addOp = numOp[IntV]((x, y) => IntV(x + y))
+  val mulOp = numOp[IntV]((x, y) => IntV(x * y))
+  val divOp = numOp[IntV]((x, y) => if(y == 0) error("Division by zero") else IntV(x / y))
+  val modOp = numOp[IntV]((x, y) => if(y == 0) error("Division by zero") else IntV(x % y))
+  val eqOp  = numOp[BooleanV]((x, y) => BooleanV(x == y))
+  val ltOp  = numOp[BooleanV]((x, y) => BooleanV(x < y))
 
   def interp(expr: Expr): Value = interp(expr, Map())
 
@@ -27,12 +35,12 @@ object Implementation extends Template {
     case Id(name) => env.getOrElse(name, error("Runtime error"))
     case IntE(value) => IntV(value)
     case BooleanE(value) => BooleanV(value)
-    case Add(l, r) => val_add(interp(l, env), interp(r, env))
-    case Mul(l, r) => val_mul(interp(l, env), interp(r, env))
-    case Div(l, r) => val_div(interp(l, env), interp(r, env))
-    case Mod(l, r) => val_mod(interp(l, env), interp(r, env))
-    case Eq(l, r) => val_eq(interp(l, env), interp(r, env))
-    case Lt(l, r) => val_lt(interp(l, env), interp(r, env))
+    case Add(l, r) => addOp(interp(l, env), interp(r, env))
+    case Mul(l, r) => mulOp(interp(l, env), interp(r, env))
+    case Div(l, r) => divOp(strict(interp(l, env)), strict(interp(r, env)))
+    case Mod(l, r) => modOp(strict(interp(l, env)), strict(interp(r, env)))
+    case Eq(l, r) => eqOp(interp(l, env), interp(r, env))
+    case Lt(l, r) => ltOp(interp(l, env), interp(r, env))
     case If(condition, trueBranch, falseBranch) => interp(condition, env) match{
       case BooleanV(true) => interp(trueBranch, env)
       case BooleanV(false) => interp(falseBranch, env)
@@ -79,6 +87,18 @@ object Implementation extends Template {
       }
       case _ => error("Runtime error")
     }
+    case App(function, arguments) => {
+      val fv = interp(function, env)
+      val avs = arguments.map(ExprV(_, env, None))
+      fv match{
+        case CloV(parameters, body, fenv) => {
+          if(parameters.length != avs.length) error("Runtime error")
+          interp(body, fenv ++ parameters.zip(avs))
+        }
+        case _ => error("Runtime error")
+      }
+    }
+
     case Test(expression, typ) => (interp(expression, env), typ) match{
       case (IntV(_), IntT) => BooleanV(true)
       case (BooleanV(_), BooleanT) => BooleanV(true)
