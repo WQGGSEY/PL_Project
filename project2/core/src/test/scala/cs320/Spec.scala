@@ -188,5 +188,52 @@ class Spec extends SpecBase {
 
   /* Write your own tests */
 
-  ㅎ
+  test(run("((1, 2)._1 + 10)"), "11")
+
+  testExc(run("{ try { vcc k; throw 1 } catch { (x) => k(x + 1) } }"), "")
+
+  // 2. 성공해야 하는 테스트 (Lexical Scoping)
+  // 'k'가 try 블록 밖에서 정의되었으므로, catch 블록에서 정상적으로 참조할 수 있습니다.
+  test(run("{ vcc k; try { throw 1 } catch { (x) => k(x + 1) } }"), "2")
+
+  test(run("({ val t = (1, 2); t._1 } + 10)"), "11")
+
+  // vcc를 사용한 테스트. 이 또한 첫 번째 값만 반환되어 통과할 수 있습니다.
+  test(run("({ vcc k; (1, 2) }._1)"), "1")
+
+  test(run("""
+    {
+      val result = {
+        try {
+          val k_try = (vcc k_in_try; k_in_try);
+          throw k_try
+        } catch { (thrown_val) =>
+          if (thrown_val.isInstanceOf[Function]) {
+            thrown_val(10)
+          } else {
+            thrown_val + 5
+          }
+        }
+      };
+      result + 5
+    }
+  """), "20")
+   testExc(run("""
+{
+  def f() = {
+    try {
+      throw 1
+    } catch { (x) =>
+      val k_zombie = (vcc k; k);
+      throw k_zombie
+    }
+  };
+
+  try {
+    f()
+  } catch { (k_val) =>
+    k_val(100)
+  }
+}
+"""), "")
 }
